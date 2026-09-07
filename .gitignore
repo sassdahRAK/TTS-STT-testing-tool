@@ -1,0 +1,66 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Environment & Secrets
+.env
+.env.*
+*.pem
+*.key
+*.cert
+*.p12
+*.pfx
+secrets/
+credentials/
+*.secret
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# OS & System
+*.dll
+*.exe
+*.dmg
+*.iso
+*.img
+*.log
+*.tmp
+*.temp
+*.cache
+
+# Project specific
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+*.wma
+output/
+results/
+test_output/
+*.zip
+
+# Tool configs
+.rayu/
+
+# Keep project structure
+!.gitignore
+!README.md
+!requirements.txt

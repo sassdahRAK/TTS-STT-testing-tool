@@ -1,0 +1,35 @@
+# Core
+PyQt6>=6.6.0
+PyQt6-Qt6>=6.6.0
+
+# Audio
+sounddevice>=0.4.6
+soundfile>=0.12.1
+numpy>=1.24.0
+
+# TTS Providers
+openai>=1.30.0
+google-cloud-texttospeech>=2.16.0
+azure-cognitiveservices-speech>=1.37.0
+pyttsx3>=2.90
+edge-tts>=6.1.0
+
+# STT Providers
+openai>=1.30.0
+google-cloud-speech>=2.26.0
+SpeechRecognition>=3.10.0
+vosk>=0.3.45
+pydub>=0.25.1
+
+# HTTP/API
+requests>=2.31.0
+httpx>=0.27.0
+
+# NeMo Scoring (STT accuracy metrics - CER/WER)
+# Install with: pip install nemo-toolkit[asr]
+# Optional: falls back to built-in scorer if not installed
+nemo-toolkit[asr]>=1.21.0
+
+# Utils
+python-dotenv>=1.0.0
+certifi>=2024.0.0

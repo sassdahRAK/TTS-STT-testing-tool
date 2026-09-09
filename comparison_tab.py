@@ -161,7 +161,7 @@ class ComparisonTab(QWidget):
         self.results_table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
         self.results_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.results_table.setAlternatingRowColors(True)
-        self.results_table.setMinimumHeight(250)
+        self.results_table.setMinimumHeight(500)
         results_layout.addWidget(self.results_table)
 
         self.content_layout.addWidget(results_card)

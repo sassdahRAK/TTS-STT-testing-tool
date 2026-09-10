@@ -24,40 +24,15 @@ from tts_providers import TTSProviderManager
 from dynamic_providers import DynamicProviderManager, DynamicTTSCaller
 from edge_tts_provider import EdgeTTSProvider, EDGE_VOICES
 from add_provider_dialog import AddProviderDialog, ManageProvidersDialog
+from ui_components import Card, CONTENT_MARGINS, CARD_MARGINS, CONTENT_SPACING
 
 
 TEST_CASES_FILE = Path(__file__).parent / "tts_test_cases.json"
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Reusable Components
+# Data Models
 # ──────────────────────────────────────────────────────────────────────────────
-class Card(QGroupBox):
-    """Modern dashboard card."""
-
-    def __init__(self, title: str = "", parent=None):
-        super().__init__(parent)
-        self.setTitle(title)
-        self.setStyleSheet("""
-            QGroupBox {
-                background: white;
-                border: 1px solid #e2e8f0;
-                border-radius: 12px;
-                margin-top: 14px;
-                padding-top: 24px;
-                font-weight: 600;
-                font-size: 15px;
-                color: #0f172a;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 20px;
-                padding: 0 10px;
-                color: #0f172a;
-            }
-        """)
-
-
 class TestCase:
     """A single TTS test case."""
 

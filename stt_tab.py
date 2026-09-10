@@ -19,37 +19,12 @@ from audio_recorder import AudioRecorder
 from add_provider_dialog import AddProviderDialog, ManageProvidersDialog
 from nemo_scoring import get_scorer
 from batch_testing import BatchTestingWidget
+from ui_components import Card, CONTENT_MARGINS, CARD_MARGINS, CONTENT_SPACING
 
 
 # ──────────────────────────────────────────────────────────────────────────────
-# Reusable Components
+# Background Worker
 # ──────────────────────────────────────────────────────────────────────────────
-class Card(QGroupBox):
-    """Modern dashboard card."""
-
-    def __init__(self, title: str = "", parent=None):
-        super().__init__(parent)
-        self.setTitle(title)
-        self.setStyleSheet("""
-            QGroupBox {
-                background: white;
-                border: 1px solid #e2e8f0;
-                border-radius: 12px;
-                margin-top: 14px;
-                padding-top: 24px;
-                font-weight: 600;
-                font-size: 15px;
-                color: #0f172a;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 20px;
-                padding: 0 10px;
-                color: #0f172a;
-            }
-        """)
-
-
 class STTWorker(QThread):
     """Background worker for STT transcription."""
     finished = pyqtSignal(dict)

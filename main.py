@@ -13,12 +13,13 @@ Requirements:
 import sys
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QTabWidget, QWidget, QVBoxLayout,
-    QLabel, QStatusBar, QMenuBar, QMenu, QMessageBox, QScrollArea
+    QHBoxLayout, QLabel, QStatusBar, QMenuBar, QMenu, QMessageBox, QScrollArea
 )
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, QSize
 from PyQt6.QtGui import QAction, QFont
 
 from config import load_config, ProviderStatus
+from ui_components import MIN_WINDOW_W, MIN_WINDOW_H, IS_MAC
 from api_tab import APITab
 from tts_tab import TTSTab
 from stt_tab import STTTab
@@ -36,8 +37,8 @@ QMainWindow {
 
 /* ── Base typography ─────────────────────────────────────────── */
 QWidget {
-    font-family: "Segoe UI", "SF Pro Display", system-ui, sans-serif;
-    font-size: 14px;
+    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    font-size: 13px;
     color: #1e293b;
 }
 
@@ -55,25 +56,25 @@ QGroupBox {
     background: white;
     border: 1px solid #e2e8f0;
     border-radius: 12px;
-    margin-top: 14px;
-    padding-top: 24px;
+    margin-top: 12px;
+    padding-top: 22px;
     font-weight: 600;
-    font-size: 15px;
+    font-size: 14px;
     color: #0f172a;
 }
 QGroupBox::title {
     subcontrol-origin: margin;
-    left: 20px;
-    padding: 0 10px;
+    left: 16px;
+    padding: 0 8px;
     color: #0f172a;
 }
 
 /* ── Buttons ─────────────────────────────────────────────────── */
 QPushButton {
-    border-radius: 8px;
-    padding: 10px 22px;
+    border-radius: 7px;
+    padding: 8px 18px;
     font-weight: 600;
-    font-size: 14px;
+    font-size: 13px;
     border: 1px solid transparent;
     color: #334155;
     background: #f1f5f9;
@@ -93,15 +94,15 @@ QPushButton:disabled {
 /* ── Tables ──────────────────────────────────────────────────── */
 QTableWidget {
     border: 1px solid #e2e8f0;
-    border-radius: 12px;
+    border-radius: 10px;
     background: white;
     gridline-color: #f1f5f9;
     selection-background-color: rgba(99, 102, 241, 0.08);
-    font-size: 14px;
+    font-size: 13px;
     alternate-background-color: #f8fafc;
 }
 QTableWidget::item {
-    padding: 10px 12px;
+    padding: 8px 10px;
     border-bottom: 1px solid #f1f5f9;
 }
 QTableWidget::item:hover {
@@ -115,24 +116,24 @@ QHeaderView::section {
     background: #f8fafc;
     border: none;
     border-bottom: 2px solid #e2e8f0;
-    padding: 12px 14px;
+    padding: 8px 10px;
     font-weight: 600;
     color: #64748b;
-    font-size: 13px;
+    font-size: 12px;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
+    letter-spacing: 0.4px;
 }
 QHeaderView::section:first {
-    border-top-left-radius: 12px;
+    border-top-left-radius: 10px;
 }
 
 /* ── Text inputs ─────────────────────────────────────────────── */
 QTextEdit, QPlainTextEdit {
     border: 1px solid #e2e8f0;
     border-radius: 8px;
-    padding: 12px;
+    padding: 10px;
     background: white;
-    font-size: 14px;
+    font-size: 13px;
     selection-background-color: rgba(99, 102, 241, 0.2);
 }
 QTextEdit:focus, QPlainTextEdit:focus {
@@ -142,9 +143,9 @@ QTextEdit:focus, QPlainTextEdit:focus {
 QLineEdit {
     border: 1px solid #e2e8f0;
     border-radius: 8px;
-    padding: 10px 14px;
+    padding: 8px 12px;
     background: white;
-    font-size: 14px;
+    font-size: 13px;
     selection-background-color: rgba(99, 102, 241, 0.2);
 }
 QLineEdit:focus {
@@ -154,20 +155,20 @@ QLineEdit:focus {
 /* ── ComboBox ────────────────────────────────────────────────── */
 QComboBox {
     border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 8px 14px;
+    border-radius: 7px;
+    padding: 6px 12px;
     background: white;
-    min-height: 24px;
-    font-size: 14px;
+    min-height: 22px;
+    font-size: 13px;
 }
 QComboBox:hover { border-color: #6366f1; }
-QComboBox::drop-down { border: none; width: 28px; }
+QComboBox::drop-down { border: none; width: 24px; }
 QComboBox QAbstractItemView {
     border: 1px solid #e2e8f0;
     border-radius: 8px;
     background: white;
     padding: 4px;
-    font-size: 14px;
+    font-size: 13px;
     selection-background-color: rgba(99, 102, 241, 0.1);
     selection-color: #1e293b;
 }
@@ -175,33 +176,57 @@ QComboBox QAbstractItemView {
 /* ── Progress bar ────────────────────────────────────────────── */
 QProgressBar {
     border: none;
-    border-radius: 6px;
+    border-radius: 5px;
     background: #e2e8f0;
     text-align: center;
-    height: 22px;
-    font-size: 12px;
+    height: 18px;
+    font-size: 11px;
     color: #64748b;
     font-weight: 600;
 }
 QProgressBar::chunk {
     background: qlineargradient(x1:0, y1:0, x2:1, y2:0,
         stop:0 #6366f1, stop:1 #8b5cf6);
-    border-radius: 6px;
+    border-radius: 5px;
 }
 
-/* ── Tab widget ──────────────────────────────────────────────── */
-QTabWidget::pane {
+/* ── Top-level tab bar (API / TTS / STT / LLM / Compare) ─────── */
+QMainWindow QTabWidget > QTabBar::tab,
+QMainWindow QTabBar::tab {
+    padding: 10px 20px;
+    margin-right: 2px;
     border: none;
-    background: #f1f5f9;
-}
-QTabBar::tab {
-    padding: 14px 28px;
-    margin-right: 4px;
-    border: none;
-    border-bottom: 3px solid transparent;
+    border-bottom: 2px solid transparent;
     background: transparent;
     color: #64748b;
-    font-size: 14px;
+    font-size: 13px;
+    font-weight: 500;
+}
+QMainWindow QTabWidget > QTabBar::tab:hover,
+QMainWindow QTabBar::tab:hover {
+    color: #6366f1;
+    background: rgba(99, 102, 241, 0.05);
+}
+QMainWindow QTabWidget > QTabBar::tab:selected,
+QMainWindow QTabBar::tab:selected {
+    color: #6366f1;
+    border-bottom: 2px solid #6366f1;
+    font-weight: 600;
+}
+
+/* ── Inner tab bars (e.g. Mic / File, response tabs) ─────────── */
+QTabWidget::pane {
+    border: none;
+    background: transparent;
+}
+QTabBar::tab {
+    padding: 8px 16px;
+    margin-right: 2px;
+    border: none;
+    border-bottom: 2px solid transparent;
+    background: transparent;
+    color: #64748b;
+    font-size: 13px;
     font-weight: 500;
 }
 QTabBar::tab:hover {
@@ -210,63 +235,57 @@ QTabBar::tab:hover {
 }
 QTabBar::tab:selected {
     color: #6366f1;
-    border-bottom: 3px solid #6366f1;
+    border-bottom: 2px solid #6366f1;
     font-weight: 600;
 }
 
-/* ── Scrollbars ──────────────────────────────────────────────── */
+/* ── Scrollbars — thin macOS-style ──────────────────────────── */
 QScrollBar:vertical {
     border: none;
     background: transparent;
-    width: 10px;
+    width: 8px;
     margin: 0;
-    border-radius: 5px;
 }
 QScrollBar::handle:vertical {
-    background: #cbd5e1;
-    border-radius: 5px;
-    min-height: 40px;
+    background: rgba(148, 163, 184, 0.6);
+    border-radius: 4px;
+    min-height: 32px;
 }
-QScrollBar::handle:vertical:hover { background: #94a3b8; }
-QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-    height: 0;
-}
+QScrollBar::handle:vertical:hover { background: rgba(100, 116, 139, 0.8); }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 QScrollBar:horizontal {
     border: none;
     background: transparent;
-    height: 10px;
+    height: 8px;
     margin: 0;
-    border-radius: 5px;
 }
 QScrollBar::handle:horizontal {
-    background: #cbd5e1;
-    border-radius: 5px;
-    min-width: 40px;
+    background: rgba(148, 163, 184, 0.6);
+    border-radius: 4px;
+    min-width: 32px;
 }
-QScrollBar::handle:horizontal:hover { background: #94a3b8; }
-QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
-    width: 0;
-}
+QScrollBar::handle:horizontal:hover { background: rgba(100, 116, 139, 0.8); }
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal { width: 0; }
 
 /* ── Status bar ──────────────────────────────────────────────── */
 QStatusBar {
     background: #f8fafc;
     border-top: 1px solid #e2e8f0;
     color: #64748b;
-    font-size: 13px;
-    padding: 4px;
+    font-size: 12px;
+    padding: 3px;
 }
 
 /* ── CheckBox ────────────────────────────────────────────────── */
 QCheckBox {
-    spacing: 8px;
-    padding: 4px;
-    font-size: 14px;
+    spacing: 6px;
+    padding: 3px;
+    font-size: 13px;
     color: #334155;
 }
 QCheckBox::indicator {
-    width: 18px;
-    height: 18px;
+    width: 16px;
+    height: 16px;
     border-radius: 4px;
     border: 2px solid #cbd5e1;
 }
@@ -279,10 +298,10 @@ QCheckBox::indicator:checked {
 /* ── SpinBox ─────────────────────────────────────────────────── */
 QSpinBox, QDoubleSpinBox {
     border: 1px solid #e2e8f0;
-    border-radius: 8px;
-    padding: 6px 10px;
+    border-radius: 7px;
+    padding: 5px 8px;
     background: white;
-    font-size: 14px;
+    font-size: 13px;
 }
 QSpinBox:focus, QDoubleSpinBox:focus {
     border-color: #6366f1;
@@ -298,7 +317,8 @@ QMenuBar {
     background: white;
     border-bottom: 1px solid #e2e8f0;
     color: #334155;
-    padding: 4px;
+    padding: 2px;
+    font-size: 13px;
 }
 QMenuBar::item:selected {
     background: rgba(99, 102, 241, 0.1);
@@ -308,10 +328,11 @@ QMenu {
     background: white;
     border: 1px solid #e2e8f0;
     border-radius: 8px;
-    padding: 6px;
+    padding: 4px;
+    font-size: 13px;
 }
 QMenu::item {
-    padding: 8px 24px;
+    padding: 7px 20px;
     border-radius: 4px;
 }
 QMenu::item:selected {
@@ -329,7 +350,9 @@ class MainWindow(QMainWindow):
         self.config = load_config()
         self.provider_status = ProviderStatus.from_config(self.config)
         self.setWindowTitle("Model Tester Tool — TTS / STT / LLM Accuracy Testing")
-        self.setMinimumSize(1400, 900)
+        self.setMinimumSize(MIN_WINDOW_W, MIN_WINDOW_H)
+        # Start at a comfortable default on macOS retina displays
+        self.resize(1100, 760)
         self._setup_ui()
         self._setup_menu()
         self._check_providers()
@@ -343,29 +366,32 @@ class MainWindow(QMainWindow):
 
         # ── Header ───────────────────────────────────────────────
         header_widget = QWidget()
-        header_widget.setFixedHeight(72)
+        header_widget.setMinimumHeight(56)
+        header_widget.setMaximumHeight(72)
         header_widget.setStyleSheet("""
             QWidget {
                 background: white;
                 border-bottom: 1px solid #e2e8f0;
             }
         """)
-        header_layout = QVBoxLayout(header_widget)
-        header_layout.setContentsMargins(28, 0, 28, 0)
+        header_layout = QHBoxLayout(header_widget)
+        header_layout.setContentsMargins(20, 0, 20, 0)
         header_layout.setSpacing(0)
 
-        header_row = QVBoxLayout()
-        header_row.setSpacing(0)
+        text_col = QVBoxLayout()
+        text_col.setSpacing(1)
+        text_col.setAlignment(Qt.AlignmentFlag.AlignVCenter)
 
         title = QLabel("Model Tester Tool")
-        title.setStyleSheet("font-size: 22px; font-weight: 700; color: #0f172a;")
-        header_row.addWidget(title)
+        title.setStyleSheet("font-size: 18px; font-weight: 700; color: #0f172a;")
+        text_col.addWidget(title)
 
         subtitle = QLabel("Test and compare TTS, STT, and LLM models  ·  Powered by NVIDIA NeMo")
-        subtitle.setStyleSheet("font-size: 13px; color: #94a3b8; margin-top: 2px;")
-        header_row.addWidget(subtitle)
+        subtitle.setStyleSheet("font-size: 12px; color: #94a3b8;")
+        text_col.addWidget(subtitle)
 
-        header_layout.addLayout(header_row)
+        header_layout.addLayout(text_col)
+        header_layout.addStretch()
         layout.addWidget(header_widget)
 
         # ── Tab widget ───────────────────────────────────────────
@@ -488,7 +514,11 @@ class MainWindow(QMainWindow):
 
 def main():
     app = QApplication(sys.argv)
-    app.setStyle("Fusion")
+    # Use the native macOS style for proper system integration, then layer our QSS on top
+    if IS_MAC:
+        app.setStyle("macOS")
+    else:
+        app.setStyle("Fusion")
     app.setStyleSheet(STYLESHEET)
 
     window = MainWindow()

@@ -20,6 +20,7 @@ from PyQt6.QtCore import Qt
 
 from config import load_config
 from nemo_scoring import get_scorer
+from ui_components import Card, CONTENT_MARGINS, CARD_MARGINS, CONTENT_SPACING
 
 
 # ──────────────────────────────────────────────────────────────────────────────

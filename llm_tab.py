@@ -15,6 +15,7 @@ from config import load_config, LLM_MODELS
 from llm_providers import LLMProviderManager
 from dynamic_providers import DynamicProviderManager, DynamicLLMCaller
 from add_provider_dialog import AddProviderDialog, ManageProvidersDialog
+from ui_components import Card, CONTENT_MARGINS, CARD_MARGINS, CONTENT_SPACING
 
 
 # ──────────────────────────────────────────────────────────────────────────────

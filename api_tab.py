@@ -7,7 +7,7 @@ import uuid
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QGroupBox, QLineEdit, QComboBox, QTableWidget, QTableWidgetItem,
-    QHeaderView, QMessageBox, QDialog, QFormLayout, QTextEdit,
+    QHeaderView, QMessageBox, QDialog, QFormLayout, QGridLayout, QTextEdit,
     QCheckBox, QSpinBox, QDoubleSpinBox, QTabWidget, QFrame,
     QScrollArea, QSizePolicy, QInputDialog
 )
@@ -18,6 +18,7 @@ from dynamic_providers import (
     DynamicProviderManager, CustomProvider,
     detect_provider_type, DETECTION_PATTERNS
 )
+from ui_components import Card, CONTENT_MARGINS, CARD_MARGINS, CONTENT_SPACING
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -194,25 +195,53 @@ class AddProviderDialog(QDialog):
         self.manager = manager
         self.detected_info = None
         self.setWindowTitle("Add New Provider")
-        self.setMinimumSize(520, 580)
+        # Wide enough that template buttons never clip; resizable by user
+        self.setMinimumSize(620, 620)
+        self.resize(680, 680)
         self._setup_ui()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(20, 16, 20, 16)
+        layout.setSpacing(12)
 
+        # ── Header ───────────────────────────────────────────────
         header = QLabel("+ Add New Provider")
-        header.setStyleSheet("font-size: 20px; font-weight: 700; color: #0f172a; padding: 8px;")
+        header.setStyleSheet("font-size: 18px; font-weight: 700; color: #0f172a;")
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(header)
 
         desc = QLabel("Connect any TTS, STT, or LLM API. Paste your endpoint URL and we'll auto-detect the type.")
-        desc.setStyleSheet("color: #64748b; padding: 0 8px 12px 8px; font-size: 13px;")
+        desc.setStyleSheet("color: #64748b; font-size: 13px; margin-bottom: 4px;")
         desc.setWordWrap(True)
         desc.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(desc)
 
+        # ── Provider Details form ────────────────────────────────
         form_group = QGroupBox("Provider Details")
+        form_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: 600;
+                font-size: 13px;
+                color: #0f172a;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 18px;
+            }
+            QGroupBox::title { subcontrol-origin: margin; left: 14px; padding: 0 6px; }
+            QGroupBox QLabel {
+                font-size: 14px;
+                font-weight: 500;
+                color: #1e293b;
+            }
+        """)
         form_layout = QFormLayout(form_group)
+        form_layout.setContentsMargins(16, 12, 16, 14)
+        form_layout.setSpacing(10)
+        # Label column fixed width so inputs get the rest of the space
+        form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight | Qt.AlignmentFlag.AlignVCenter)
+        form_layout.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
 
         self.name_input = QLineEdit()
         self.name_input.setPlaceholderText("My Custom Provider")
@@ -223,20 +252,30 @@ class AddProviderDialog(QDialog):
         self.endpoint_input.textChanged.connect(self._on_endpoint_changed)
         form_layout.addRow("Endpoint URL *:", self.endpoint_input)
 
+        # Auto-detect row
         detect_row = QHBoxLayout()
-        self.detect_btn = QPushButton("Auto-Detect Type")
-        self.detect_btn.setStyleSheet(
-            "QPushButton { background-color: #f59e0b; color: white; padding: 6px 16px; }"
-        )
+        detect_row.setSpacing(10)
+        self.detect_btn = QPushButton("⚡ Auto-Detect Type")
+        self.detect_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #f59e0b; color: white;
+                padding: 6px 16px; font-weight: 600; font-size: 13px;
+                border-radius: 7px;
+            }
+            QPushButton:hover { background-color: #d97706; }
+        """)
         self.detect_btn.clicked.connect(self._on_detect)
         detect_row.addWidget(self.detect_btn)
         self.detect_status = QLabel("")
+        self.detect_status.setMinimumWidth(160)
+        self.detect_status.setStyleSheet("font-size: 14px; font-weight: 600;")
         detect_row.addWidget(self.detect_status)
         detect_row.addStretch()
         form_layout.addRow("", detect_row)
 
         self.type_combo = QComboBox()
         self.type_combo.addItems(["TTS (Text-to-Speech)", "STT (Speech-to-Text)", "LLM (Language Model)"])
+        self.type_combo.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
         form_layout.addRow("Provider Type *:", self.type_combo)
 
         self.api_key_input = QLineEdit()
@@ -250,64 +289,96 @@ class AddProviderDialog(QDialog):
 
         self.models_input = QLineEdit()
         self.models_input.setPlaceholderText("model1, model2, model3")
-        form_layout.addRow("Models (comma-sep):", self.models_input)
+        form_layout.addRow("Models:", self.models_input)
 
         self.region_input = QLineEdit()
         self.region_input.setPlaceholderText("e.g., eastus, us-west (optional)")
-        form_layout.addRow("Region (optional):", self.region_input)
+        form_layout.addRow("Region:", self.region_input)
 
         layout.addWidget(form_group)
 
+        # ── Quick Templates — wrapping grid ─────────────────────
         templates_group = QGroupBox("Quick Templates (click to auto-fill)")
-        templates_layout = QHBoxLayout(templates_group)
-        templates_layout.setSpacing(6)
+        templates_group.setStyleSheet("""
+            QGroupBox {
+                font-weight: 600;
+                font-size: 13px;
+                color: #0f172a;
+                border: 1px solid #e2e8f0;
+                border-radius: 10px;
+                margin-top: 10px;
+                padding-top: 18px;
+            }
+            QGroupBox::title { subcontrol-origin: margin; left: 14px; padding: 0 6px; }
+        """)
+
+        # Use a grid layout (3 columns) so buttons never overflow or clip
+        grid = QGridLayout(templates_group)
+        grid.setContentsMargins(12, 10, 12, 12)
+        grid.setSpacing(8)
 
         templates = [
-            ("OpenAI TTS", "https://api.openai.com/v1/audio/speech"),
-            ("OpenAI Whisper", "https://api.openai.com/v1/audio/transcriptions"),
-            ("OpenAI Chat", "https://api.openai.com/v1/chat/completions"),
-            ("Anthropic", "https://api.anthropic.com/v1/messages"),
-            ("Deepgram", "https://api.deepgram.com/v1/listen"),
-            ("Groq", "https://api.groq.com/openai/v1/chat/completions"),
-            ("OpenRouter", "https://openrouter.ai/api/v1/chat/completions"),
-            ("ElevenLabs", "https://api.elevenlabs.io/v1/text-to-speech"),
-            ("Together", "https://api.together.xyz/v1/chat/completions"),
+            ("OpenAI TTS",    "https://api.openai.com/v1/audio/speech"),
+            ("OpenAI Whisper","https://api.openai.com/v1/audio/transcriptions"),
+            ("OpenAI Chat",   "https://api.openai.com/v1/chat/completions"),
+            ("Anthropic",     "https://api.anthropic.com/v1/messages"),
+            ("Deepgram",      "https://api.deepgram.com/v1/listen"),
+            ("Groq",          "https://api.groq.com/openai/v1/chat/completions"),
+            ("OpenRouter",    "https://openrouter.ai/api/v1/chat/completions"),
+            ("ElevenLabs",    "https://api.elevenlabs.io/v1/text-to-speech"),
+            ("Together AI",   "https://api.together.xyz/v1/chat/completions"),
         ]
-        for name, url in templates:
+
+        COLS = 3
+        for i, (name, url) in enumerate(templates):
             btn = QPushButton(name)
             btn.setStyleSheet("""
                 QPushButton {
-                    padding: 6px 12px;
+                    padding: 7px 14px;
                     background: #eef2ff;
                     border: 1px solid #c7d2fe;
-                    border-radius: 6px;
-                    font-size: 12px;
+                    border-radius: 7px;
+                    font-size: 13px;
+                    font-weight: 500;
                     color: #4f46e5;
                 }
-                QPushButton:hover { background: #e0e7ff; }
+                QPushButton:hover { background: #e0e7ff; border-color: #a5b4fc; }
+                QPushButton:pressed { background: #c7d2fe; }
             """)
+            # Each button stretches to fill its grid cell equally
+            btn.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
             btn.clicked.connect(lambda checked, u=url: self._fill_template(u))
-            templates_layout.addWidget(btn)
+            grid.addWidget(btn, i // COLS, i % COLS)
 
-        templates_layout.addStretch()
+        # Make all columns share space equally
+        for col in range(COLS):
+            grid.setColumnStretch(col, 1)
+
         layout.addWidget(templates_group)
 
+        # ── Footer buttons ───────────────────────────────────────
         btn_row = QHBoxLayout()
+        btn_row.setSpacing(10)
         btn_row.addStretch()
 
         cancel_btn = QPushButton("Cancel")
+        cancel_btn.setMinimumWidth(90)
         cancel_btn.clicked.connect(self.reject)
         btn_row.addWidget(cancel_btn)
 
         self.add_btn = QPushButton("Add Provider")
+        self.add_btn.setMinimumWidth(130)
         self.add_btn.setStyleSheet("""
             QPushButton {
                 background-color: #6366f1;
                 color: white;
                 padding: 10px 28px;
                 font-weight: 600;
+                font-size: 13px;
+                border-radius: 8px;
             }
             QPushButton:hover { background-color: #4f46e5; }
+            QPushButton:pressed { background-color: #4338ca; }
         """)
         self.add_btn.clicked.connect(self._on_add)
         btn_row.addWidget(self.add_btn)

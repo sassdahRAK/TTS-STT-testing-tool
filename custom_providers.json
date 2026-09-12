@@ -29,5 +29,39 @@
     "headers": {},
     "config": {},
     "created_at": "2026-09-11 18:33:49"
+  },
+  {
+    "id": "4d5f5f0b",
+    "name": "CAMB.AI",
+    "provider_type": "tts",
+    "api_key": "1497c64b-a746-495c-a988-4538fac993eb",
+    "endpoint": "https://client.camb.ai/apis/tts-stream",
+    "models": [
+      "mars-8.1-flash-beta",
+      "mars-8.1-pro-beta",
+      "mars-flash",
+      "mars-pro"
+    ],
+    "headers": {},
+    "config": {
+      "language": "km-kh"
+    },
+    "created_at": "2026-09-12 16:49:53"
+  },
+  {
+    "id": "16cbfd93",
+    "name": "Camb Ai",
+    "provider_type": "stt",
+    "api_key": "1497c64b-a746-495c-a988-4538fac993eb",
+    "endpoint": "https://client.camb.ai/apis/transcription",
+    "models": [
+      "mars-8.1-flash-beta",
+      "mars-8.1-pro-beta",
+      "mars-flash",
+      "mars-pro"
+    ],
+    "headers": {},
+    "config": {},
+    "created_at": "2026-09-12 17:35:01"
   }
 ]

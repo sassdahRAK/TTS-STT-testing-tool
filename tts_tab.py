@@ -447,11 +447,11 @@ class TTSTab(QWidget):
     # Emitted per provider result: (provider, voice, success, duration_ms)
     result_ready = pyqtSignal(str, str, bool, float)
 
-    def __init__(self):
+    def __init__(self, dynamic_manager=None):
         super().__init__()
         self.config = load_config()
         self.builtin_manager = TTSProviderManager(self.config)
-        self.dynamic_manager = DynamicProviderManager()
+        self.dynamic_manager = dynamic_manager or DynamicProviderManager()
         self.edge_tts = EdgeTTSProvider(self.config)
         self.test_case_manager = TestCaseManager()
         self.current_results = {}

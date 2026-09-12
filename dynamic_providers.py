@@ -68,6 +68,12 @@ DETECTION_PATTERNS = {
         "models": ["eleven_monolingual_v1", "eleven_multilingual_v1"],
         "endpoint_template": "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
     },
+    "camb_ai": {
+        "patterns": ["client.camb.ai", "camb.ai/apis"],
+        "type": "tts",
+        "models": ["mars-8.1-flash-beta", "mars-8.1-pro-beta", "mars-flash", "mars-pro"],
+        "endpoint_template": "https://client.camb.ai/apis/tts-stream",
+    },
     "google_tts": {
         "patterns": ["texttospeech.googleapis.com"],
         "type": "tts",
@@ -219,6 +225,63 @@ class DynamicTTSCaller:
                         endpoint, params=params,
                         content=text.encode("utf-8"), headers=headers
                     )
+                    response.raise_for_status()
+                    with open(output_path, "wb") as f:
+                        f.write(response.content)
+
+            # ── Camb.ai TTS ───────────────────────────────────────────────────
+            # POST https://client.camb.ai/apis/tts-stream
+            # Auth: x-api-key header (not Bearer)
+            # Body: JSON with text, voice_id (int), language (BCP-47 lowercase), speech_model
+            # Response: raw binary audio (audio/wav)
+            elif "camb.ai" in endpoint:
+                headers.pop("Authorization", None)
+                headers["x-api-key"] = provider.api_key
+                headers["Content-Type"] = "application/json"
+
+                speech_model = model if model else "mars-8.1-flash-beta"
+
+                # voice_id must be an integer — default 147320 works for all languages
+                try:
+                    voice_id = int(model)
+                except (ValueError, TypeError):
+                    voice_id = 147320
+
+                # Map app language codes to Camb.ai BCP-47 short_name
+                CAMB_LANG_MAP = {
+                    "km-KH": "km-kh",
+                    "en-US": "en-us",
+                    "en-GB": "en-gb",
+                    "fr-FR": "fr-fr",
+                    "de-DE": "de-de",
+                    "es-ES": "es-es",
+                    "ja-JP": "ja-jp",
+                    "zh-CN": "zh-cn",
+                    "ko-KR": "ko-kr",
+                    "vi-VN": "vi-vn",
+                    "th-TH": "th-th",
+                    "id-ID": "id-id",
+                    "hi-IN": "hi-in",
+                    "ar-SA": "ar-sa",
+                    "ru-RU": "ru-ru",
+                }
+
+                # Resolve language: provider config > passed voice param > default en-us
+                camb_lang = provider.config.get("language", "en-us")
+                # If voice carries a language code (e.g. "km-KH") use that
+                if voice and "-" in voice and len(voice) == 5:
+                    camb_lang = CAMB_LANG_MAP.get(voice, voice.lower())
+
+                payload = {
+                    "text": text,
+                    "voice_id": voice_id,
+                    "language": camb_lang,
+                    "speech_model": speech_model,
+                    "output_configuration": {"format": "wav"},
+                }
+
+                with httpx.Client(timeout=120.0) as client:
+                    response = client.post(endpoint, json=payload, headers=headers)
                     response.raise_for_status()
                     with open(output_path, "wb") as f:
                         f.write(response.content)

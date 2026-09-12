@@ -180,6 +180,7 @@ class ProviderCard(QFrame):
             if parent:
                 parent.dynamic_manager.remove_provider(self.provider.id)
                 parent._refresh()
+                parent.provider_changed.emit()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -544,9 +545,12 @@ class EditProviderDialog(QDialog):
 class APITab(QWidget):
     """Dedicated tab for managing custom API providers — full page scroll."""
 
-    def __init__(self):
+    # Emitted whenever a provider is added or removed — other tabs connect to this
+    provider_changed = pyqtSignal()
+
+    def __init__(self, dynamic_manager=None):
         super().__init__()
-        self.dynamic_manager = DynamicProviderManager()
+        self.dynamic_manager = dynamic_manager or DynamicProviderManager()
         self._setup_ui()
         self._refresh()
 
@@ -690,5 +694,8 @@ class APITab(QWidget):
 
     def _on_add_provider(self):
         dialog = AddProviderDialog(self.dynamic_manager, self)
-        dialog.provider_added.connect(lambda _: self._refresh())
+        def _on_added(_):
+            self._refresh()
+            self.provider_changed.emit()
+        dialog.provider_added.connect(_on_added)
         dialog.exec()

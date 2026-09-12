@@ -99,11 +99,11 @@ class LLMWorker(QThread):
 class LLMTab(QWidget):
     """Tab for testing LLM API models — full page scroll."""
 
-    def __init__(self):
+    def __init__(self, dynamic_manager=None):
         super().__init__()
         self.config = load_config()
         self.builtin_manager = LLMProviderManager(self.config)
-        self.dynamic_manager = DynamicProviderManager()
+        self.dynamic_manager = dynamic_manager or DynamicProviderManager()
         self.current_results = {}
         self._setup_ui()
         self._refresh_providers()

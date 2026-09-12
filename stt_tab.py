@@ -71,11 +71,11 @@ class STTTab(QWidget):
 
     results_ready = pyqtSignal(dict, str)
 
-    def __init__(self):
+    def __init__(self, dynamic_manager=None):
         super().__init__()
         self.config = load_config()
         self.builtin_manager = STTProviderManager(self.config)
-        self.dynamic_manager = DynamicProviderManager()
+        self.dynamic_manager = dynamic_manager or DynamicProviderManager()
         self.recorder = AudioRecorder(self.config.sample_rate, self.config.audio_channels)
         self.scorer = get_scorer()
         self.current_audio_path = None

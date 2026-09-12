@@ -19,6 +19,7 @@ from PyQt6.QtCore import Qt, QTimer, QSize
 from PyQt6.QtGui import QAction, QFont
 
 from config import load_config, ProviderStatus
+from dynamic_providers import DynamicProviderManager
 from ui_components import MIN_WINDOW_W, MIN_WINDOW_H, IS_MAC
 from api_tab import APITab
 from tts_tab import TTSTab
@@ -400,10 +401,13 @@ class MainWindow(QMainWindow):
             QTabWidget::pane { border: none; }
         """)
 
-        self.api_tab = APITab()
-        self.tts_tab = TTSTab()
-        self.stt_tab = STTTab()
-        self.llm_tab = LLMTab()
+        # One shared DynamicProviderManager — all tabs see the same providers
+        shared_mgr = DynamicProviderManager()
+
+        self.api_tab = APITab(dynamic_manager=shared_mgr)
+        self.tts_tab = TTSTab(dynamic_manager=shared_mgr)
+        self.stt_tab = STTTab(dynamic_manager=shared_mgr)
+        self.llm_tab = LLMTab(dynamic_manager=shared_mgr)
         self.comparison_tab = ComparisonTab()
 
         self.tabs.addTab(self.api_tab, "API")
@@ -411,6 +415,16 @@ class MainWindow(QMainWindow):
         self.tabs.addTab(self.stt_tab, "STT")
         self.tabs.addTab(self.llm_tab, "LLM API")
         self.tabs.addTab(self.comparison_tab, "Compare & Rank")
+
+        # When a provider is added/removed in the API tab,
+        # immediately refresh checkboxes in all other tabs
+        def _refresh_all_tabs():
+            self.tts_tab._refresh_providers()
+            self.stt_tab._refresh_providers()
+            self.llm_tab._refresh_providers()
+            self._update_status_bar()
+
+        self.api_tab.provider_changed.connect(_refresh_all_tabs)
 
         self.stt_tab.results_ready.connect(self._on_stt_results_ready)
         self.stt_tab.batch_widget.results_ready.connect(self._on_stt_results_ready)

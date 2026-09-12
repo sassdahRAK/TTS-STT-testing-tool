@@ -97,13 +97,14 @@ class TTSWorker(QThread):
     progress = pyqtSignal(str, str)
 
     def __init__(self, builtin_manager, dynamic_manager, edge_tts,
-                 test_case, voice, output_dir, providers, dynamic_providers, use_edge):
+                 test_case, voice, edge_voice, output_dir, providers, dynamic_providers, use_edge):
         super().__init__()
         self.builtin_manager = builtin_manager
         self.dynamic_manager = dynamic_manager
         self.edge_tts = edge_tts
         self.test_case = test_case
         self.voice = voice
+        self.edge_voice = edge_voice
         self.output_dir = output_dir
         self.providers = providers
         self.dynamic_providers = dynamic_providers
@@ -126,7 +127,7 @@ class TTSWorker(QThread):
         if self.use_edge:
             self.progress.emit(f"{self.test_case.name} | Edge TTS", "Synthesizing...")
             path = os.path.join(self.output_dir, f"tts_edge_{self.test_case.id}.wav")
-            result = self.edge_tts.synthesize(text, self.voice, path)
+            result = self.edge_tts.synthesize(text, self.edge_voice, path)
             results["edge"] = result
             if result["success"]:
                 results["edge"]["output_path"] = path
@@ -443,6 +444,9 @@ class CSVPreviewDialog(QDialog):
 class TTSTab(QWidget):
     """Tab for testing Text-to-Speech — full page scroll."""
 
+    # Emitted per provider result: (provider, voice, success, duration_ms)
+    result_ready = pyqtSignal(str, str, bool, float)
+
     def __init__(self):
         super().__init__()
         self.config = load_config()
@@ -451,6 +455,7 @@ class TTSTab(QWidget):
         self.edge_tts = EdgeTTSProvider(self.config)
         self.test_case_manager = TestCaseManager()
         self.current_results = {}
+        self._workers = []  # keep references so threads aren't GC'd while running
         self.player = None
         self.audio_output = None
         self.test_case_widgets = {}
@@ -485,7 +490,13 @@ class TTSTab(QWidget):
         builtin_row = QHBoxLayout()
         builtin_row.addWidget(QLabel("Built-in:"))
         self.builtin_checks = {}
-        for key, label in [("openai", "OpenAI"), ("google", "Google"), ("azure", "Azure"), ("local", "Local pyttsx3")]:
+        for key, label in [
+            ("openai",  "OpenAI"),
+            ("google",  "Google"),
+            ("azure",   "Azure"),
+            ("local",   "Local pyttsx3"),
+            ("mms_tts", "Meta MMS TTS"),
+        ]:
             cb = QCheckBox(label)
             cb.setProperty("provider_key", key)
             self.builtin_checks[key] = cb
@@ -875,6 +886,14 @@ class TTSTab(QWidget):
             return
 
         voice = self.voice_combo.currentData() or self.voice_combo.currentText() or "en-US-AriaNeural"
+
+        # If edge is checked but the selected voice isn't a valid Edge voice,
+        # use a safe default Edge voice so it doesn't receive "alloy" etc.
+        edge_voice = voice
+        valid_edge = any(voice == vid or voice == desc
+                         for vid, desc in EDGE_VOICES.items())
+        if use_edge and not valid_edge:
+            edge_voice = "en-US-AriaNeural"  # safe fallback
         self.current_results.clear()
 
         self.run_all_btn.setEnabled(False)
@@ -886,26 +905,28 @@ class TTSTab(QWidget):
 
         self._pending_test_cases = test_cases
         self._current_tc_index = 0
-        self._run_single_test_case(voice, builtin, dynamic, use_edge)
+        self._run_single_test_case(voice, edge_voice, builtin, dynamic, use_edge)
 
-    def _run_single_test_case(self, voice, builtin, dynamic, use_edge):
+    def _run_single_test_case(self, voice, edge_voice, builtin, dynamic, use_edge):
         if self._current_tc_index >= len(self._pending_test_cases):
             self.run_all_btn.setEnabled(True)
             self.progress_bar.setVisible(False)
+            self._workers.clear()  # all done — release all thread references
             return
 
         tc = self._pending_test_cases[self._current_tc_index]
         if not tc.text.strip():
             self._current_tc_index += 1
-            self._run_single_test_case(voice, builtin, dynamic, use_edge)
+            self._run_single_test_case(voice, edge_voice, builtin, dynamic, use_edge)
             return
 
         self.worker = TTSWorker(
             self.builtin_manager, self.dynamic_manager, self.edge_tts,
-            tc, voice, self.config.output_dir, builtin, dynamic, use_edge
+            tc, voice, edge_voice, self.config.output_dir, builtin, dynamic, use_edge
         )
         self.worker.progress.connect(self._on_progress)
-        self.worker.finished.connect(lambda results: self._on_single_finished(results, tc, voice, builtin, dynamic, use_edge))
+        self.worker.finished.connect(lambda results: self._on_single_finished(results, tc, voice, edge_voice, builtin, dynamic, use_edge))
+        self._workers.append(self.worker)
         self.worker.start()
 
     def _on_progress(self, provider: str, status: str):
@@ -923,7 +944,7 @@ class TTSTab(QWidget):
         self.results_table.setItem(row, 3, QTableWidgetItem("-"))
         self.results_table.setItem(row, 4, QTableWidgetItem("-"))
 
-    def _on_single_finished(self, results, tc, voice, builtin, dynamic, use_edge):
+    def _on_single_finished(self, results, tc, voice, edge_voice, builtin, dynamic, use_edge):
         self.current_results[tc.id] = results
 
         for row in range(self.results_table.rowCount()):
@@ -947,8 +968,19 @@ class TTSTab(QWidget):
                                 self.results_table.item(row, 2).setText("Failed")
                             break
 
+        # Emit each result to the Compare & Rank tab
+        for key, r in results.items():
+            provider_name = r.get("provider_name", key)
+            self.result_ready.emit(
+                provider_name,
+                voice or "default",
+                r.get("success", False),
+                r.get("duration_ms", 0.0)
+            )
+
         self._current_tc_index += 1
-        self._run_single_test_case(voice, builtin, dynamic, use_edge)
+        self._workers = [w for w in self._workers if not w.isFinished()]
+        self._run_single_test_case(voice, edge_voice, builtin, dynamic, use_edge)
 
     def _play_file(self, path: str):
         if not os.path.exists(path):

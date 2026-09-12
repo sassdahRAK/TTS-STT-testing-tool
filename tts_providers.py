@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Optional
 
 from config import APIConfig
+from mms_providers import get_mms_tts, MMSTTSProvider
 
 
 class TTSProvider(ABC):
@@ -184,6 +185,25 @@ class LocalTTSProvider(TTSProvider):
             return {"success": False, "duration_ms": 0, "error": str(e)}
 
 
+class MMSTTSProviderWrapper(TTSProvider):
+    """Wraps MMSTTSProvider to fit the TTSProvider interface."""
+
+    name = "mms_tts"
+    display_name = "Meta MMS TTS"
+
+    def __init__(self, config: APIConfig):
+        super().__init__(config)
+        self._mms = get_mms_tts()
+
+    def is_available(self) -> bool:
+        return self._mms.is_available()
+
+    def synthesize(self, text: str, voice: str, output_path: str) -> dict:
+        # voice field carries the language code (e.g. "km-KH") when used from TTS tab
+        language = voice if voice else "km-KH"
+        return self._mms.synthesize(text, language, output_path)
+
+
 class TTSProviderManager:
     """Manages all TTS providers and provides a unified interface."""
 
@@ -194,6 +214,7 @@ class TTSProviderManager:
             "google": GoogleTTSProvider(config),
             "azure": AzureTTSProvider(config),
             "local": LocalTTSProvider(config),
+            "mms_tts": MMSTTSProviderWrapper(config),
         }
 
     def get_available_providers(self) -> list[str]:

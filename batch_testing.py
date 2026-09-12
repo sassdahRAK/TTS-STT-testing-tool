@@ -148,7 +148,8 @@ class BatchTestingWidget(QWidget):
         self.file_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
         self.file_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         self.file_table.setAlternatingRowColors(True)
-        self.file_table.setMaximumHeight(150)
+        self.file_table.setMinimumHeight(320)   # comfortably shows ~10 rows
+        self.file_table.setMaximumHeight(480)   # caps growth so it doesn't swallow the screen
         file_layout.addWidget(self.file_table)
 
         self.file_count_label = QLabel("0 files loaded")
@@ -186,7 +187,13 @@ class BatchTestingWidget(QWidget):
         self.builtin_checks = {}
         builtin_row = QHBoxLayout()
         builtin_row.addWidget(QLabel("Built-in:"))
-        for key, label in [("openai", "OpenAI Whisper"), ("google", "Google Cloud"), ("azure", "Azure"), ("local", "Local Vosk")]:
+        for key, label in [
+            ("openai",  "OpenAI Whisper"),
+            ("google",  "Google Cloud"),
+            ("azure",   "Azure"),
+            ("local",   "Local Vosk"),
+            ("mms_stt", "Meta MMS STT"),
+        ]:
             cb = QCheckBox(label)
             cb.setProperty("provider_key", key)
             self.builtin_checks[key] = cb
@@ -298,6 +305,7 @@ class BatchTestingWidget(QWidget):
         if paths:
             for path in paths:
                 self.items.append(BatchTestItem(audio_path=path))
+            self._apply_pending_refs()
             self._refresh_file_table()
 
     def _add_folder(self):
@@ -309,45 +317,148 @@ class BatchTestingWidget(QWidget):
                 if ext in extensions:
                     path = os.path.join(folder, filename)
                     self.items.append(BatchTestItem(audio_path=path))
+            self._apply_pending_refs()
             self._refresh_file_table()
+
+    def _apply_pending_refs(self):
+        """Apply any TSV references that were loaded before audio files."""
+        pending = getattr(self, '_pending_refs', {})
+        if not pending:
+            return
+        matched = 0
+        for item in self.items:
+            stem = os.path.splitext(os.path.basename(item.audio_path))[0]
+            if stem in pending:
+                item.reference = pending[stem]
+                matched += 1
+        if matched:
+            self._pending_refs = {}  # clear after applying
 
     def _load_references(self):
         path, _ = QFileDialog.getOpenFileName(
             self, "Load References", "",
-            "CSV Files (*.csv);;JSON Files (*.json);;All Files (*)"
+            "Reference Files (*.tsv *.csv *.json);;TSV Files (*.tsv);;CSV Files (*.csv);;JSON Files (*.json);;All Files (*)"
         )
         if not path:
             return
 
         try:
+            audio_extensions = {'.wav', '.mp3', '.flac', '.ogg', '.m4a', '.wma'}
+
+            # ── TSV: match by filename stem against already-loaded audio files ──
+            if path.endswith('.tsv') or path.endswith('.txt'):
+                loaded_refs = {}  # stem -> reference_text
+                with open(path, 'r', encoding='utf-8') as f:
+                    for line in f:
+                        line = line.rstrip('\n')
+                        if not line.strip():
+                            continue
+                        cols = line.split('\t')
+                        if len(cols) < 2:
+                            continue
+                        stem      = cols[0].strip()   # filename without extension
+                        reference = cols[-1].strip()   # last column = text
+                        if stem:
+                            loaded_refs[stem] = reference
+
+                if not loaded_refs:
+                    QMessageBox.warning(self, "No Data",
+                        "No entries found in the TSV file.\n\n"
+                        "Expected format:\n"
+                        "  filename<TAB>reference_text\n"
+                        "  filename<TAB><empty><TAB>reference_text")
+                    return
+
+                if self.items:
+                    # Match against already-loaded audio items by filename stem
+                    matched = 0
+                    for item in self.items:
+                        stem = os.path.splitext(os.path.basename(item.audio_path))[0]
+                        if stem in loaded_refs:
+                            item.reference = loaded_refs[stem]
+                            matched += 1
+                    self._refresh_file_table()
+                    QMessageBox.information(self, "References Loaded",
+                        f"Matched {matched} of {len(self.items)} audio files "
+                        f"from {len(loaded_refs)} TSV entries.")
+                else:
+                    # No audio loaded yet — store for when folder is added
+                    self._pending_refs = loaded_refs
+                    QMessageBox.information(self, "TSV Loaded",
+                        f"Loaded {len(loaded_refs)} reference entries.\n\n"
+                        "Now use 'Add Folder' or 'Add Audio Files' — "
+                        "references will be matched automatically by filename.")
+                return
+
+            # ── JSON ────────────────────────────────────────────────────────────
+            loaded = []
             if path.endswith('.json'):
                 with open(path, 'r', encoding='utf-8') as f:
                     data = json.load(f)
                 if isinstance(data, list):
                     for item in data:
+                        if not isinstance(item, dict):
+                            continue
                         audio_path = item.get('audio_path', item.get('file', ''))
-                        reference = item.get('reference', item.get('text', item.get('transcript', '')))
-                        if audio_path:
-                            self.items.append(BatchTestItem(audio_path=audio_path, reference=reference))
+                        reference  = item.get('reference', item.get('text', item.get('transcript', '')))
+                        if audio_path and str(audio_path).strip():
+                            loaded.append(BatchTestItem(
+                                audio_path=str(audio_path).strip(),
+                                reference=str(reference).strip() if reference else ""
+                            ))
                 elif isinstance(data, dict):
                     for audio_path, reference in data.items():
-                        self.items.append(BatchTestItem(audio_path=audio_path, reference=reference))
+                        if audio_path and str(audio_path).strip():
+                            loaded.append(BatchTestItem(
+                                audio_path=str(audio_path).strip(),
+                                reference=str(reference).strip() if reference else ""
+                            ))
+
+            # ── CSV ─────────────────────────────────────────────────────────────
             else:
                 with open(path, 'r', encoding='utf-8') as f:
-                    reader = csv.reader(f)
-                    for row in reader:
-                        if len(row) >= 2:
-                            self.items.append(BatchTestItem(audio_path=row[0].strip(), reference=row[1].strip()))
-                        elif len(row) == 1:
-                            self.items.append(BatchTestItem(audio_path=row[0].strip()))
+                    raw = f.read()
+                rows = [r for r in csv.reader(raw.splitlines()) if any(c.strip() for c in r)]
+                if not rows:
+                    QMessageBox.warning(self, "Empty File", "The CSV file has no data.")
+                    return
+                first_cell = rows[0][0].strip() if rows[0] else ''
+                start = 0 if any(first_cell.lower().endswith(e) for e in audio_extensions) else 1
+                for row in rows[start:]:
+                    if not row:
+                        continue
+                    audio_path = row[0].strip()
+                    reference  = row[1].strip() if len(row) > 1 else ''
+                    if audio_path:
+                        loaded.append(BatchTestItem(audio_path=audio_path, reference=reference))
 
+            if not loaded:
+                QMessageBox.warning(self, "No Data",
+                    "No valid entries found.\n\n"
+                    "CSV: audio_path, reference_text\n"
+                    "JSON: [{\"audio_path\": \"...\", \"reference\": \"...\"}]")
+                return
+
+            valid_audio = [i for i in loaded
+                           if any(i.audio_path.lower().endswith(e) for e in audio_extensions)]
+            if not valid_audio:
+                QMessageBox.warning(self, "No Audio Paths",
+                    f"Loaded {len(loaded)} rows but none have audio file paths.\n\n"
+                    f"First entry: \"{loaded[0].audio_path}\"")
+                return
+
+            self.items.clear()
+            self.items.extend(loaded)
             self._refresh_file_table()
-            QMessageBox.information(self, "Loaded", f"Loaded references for {len(self.items)} files.")
+            QMessageBox.information(self, "Loaded", f"Loaded {len(self.items)} file entries.")
+
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Could not load references:\n{e}")
+            QMessageBox.critical(self, "Load Error",
+                f"Could not load references:\n{e}\n\nMake sure the file format is correct.")
 
     def _clear_files(self):
         self.items.clear()
+        self._pending_refs = {}
         self._refresh_file_table()
 
     def _refresh_file_table(self):
@@ -400,8 +511,16 @@ class BatchTestingWidget(QWidget):
         self.progress_bar.setValue(self.progress_bar.value() + 1)
 
     def _on_file_finished(self, file_index: int, results: dict):
+        if file_index >= len(self.items):
+            return  # index out of range — guard against stale worker signals
         item = self.items[file_index]
-        self.file_table.item(file_index, 3).setText("Done")
+
+        # Safely update the status cell — item() can return None
+        status_cell = self.file_table.item(file_index, 3)
+        if status_cell:
+            status_cell.setText("Done")
+        else:
+            self.file_table.setItem(file_index, 3, QTableWidgetItem("Done"))
 
         for key, r in results.items():
             row = self.results_table.rowCount()

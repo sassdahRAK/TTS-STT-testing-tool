@@ -37,7 +37,7 @@ QMainWindow {
 
 /* ── Base typography ─────────────────────────────────────────── */
 QWidget {
-    font-family: -apple-system, "SF Pro Text", "Helvetica Neue", "Segoe UI", system-ui, sans-serif;
+    font-family: "Helvetica Neue", "Segoe UI", Arial, sans-serif;
     font-size: 13px;
     color: #1e293b;
 }
@@ -414,6 +414,7 @@ class MainWindow(QMainWindow):
 
         self.stt_tab.results_ready.connect(self._on_stt_results_ready)
         self.stt_tab.batch_widget.results_ready.connect(self._on_stt_results_ready)
+        self.tts_tab.result_ready.connect(self._on_tts_result_ready)
 
         layout.addWidget(self.tabs)
 
@@ -466,6 +467,15 @@ class MainWindow(QMainWindow):
         if custom_count > 0:
             parts.append(f"{custom_count} custom")
         self.status_bar.showMessage(f"Configured providers: {', '.join(parts)}")
+
+    def _on_tts_result_ready(self, provider: str, voice: str, success: bool, duration_ms: float):
+        self.comparison_tab.add_test_result(
+            test_type="TTS",
+            provider=provider,
+            model=voice,
+            success=success,
+            duration_ms=duration_ms,
+        )
 
     def _on_stt_results_ready(self, *args):
         if len(args) == 2:

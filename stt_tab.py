@@ -209,7 +209,13 @@ class STTTab(QWidget):
         builtin_row = QHBoxLayout()
         builtin_row.addWidget(QLabel("Built-in:"))
         self.builtin_checks = {}
-        for key, label in [("openai", "OpenAI Whisper"), ("google", "Google Cloud"), ("azure", "Azure"), ("local", "Local Vosk")]:
+        for key, label in [
+            ("openai",  "OpenAI Whisper"),
+            ("google",  "Google Cloud"),
+            ("azure",   "Azure"),
+            ("local",   "Local Vosk"),
+            ("mms_stt", "Meta MMS STT"),
+        ]:
             cb = QCheckBox(label)
             cb.setProperty("provider_key", key)
             self.builtin_checks[key] = cb
@@ -342,7 +348,7 @@ class STTTab(QWidget):
 
     def _on_manage_providers(self):
         dialog = ManageProvidersDialog(self.dynamic_manager, self)
-        dialog.finished.connect(self._refresh_providers())
+        dialog.finished.connect(lambda _: self._refresh_providers())
         dialog.exec()
 
     def _toggle_recording(self):
@@ -434,23 +440,25 @@ class STTTab(QWidget):
         self.current_results = results
 
         reference = self.ref_text_edit.toPlainText().strip()
-
         self.results_ready.emit(results, reference)
 
         for row in range(self.results_table.rowCount()):
             provider_item = self.results_table.item(row, 0)
-            if provider_item:
-                provider_name = provider_item.text()
-                for key, r in results.items():
-                    name_match = r.get("provider_name", key).lower() == provider_name.lower()
-                    key_match = key.lower() == provider_name.lower()
-                    if name_match or key_match:
-                        if r["success"]:
-                            self.results_table.item(row, 1).setText(r["text"])
-                            self.results_table.setItem(row, 2, QTableWidgetItem(f"{r['duration_ms']:.0f}"))
-                            self.results_table.item(row, 3).setText("Success")
+            if not provider_item:
+                continue
+            provider_name = provider_item.text()
+            for key, r in results.items():
+                name_match = r.get("provider_name", key).lower() == provider_name.lower()
+                key_match = key.lower() == provider_name.lower()
+                if name_match or key_match:
+                    if r.get("success"):
+                        # Safely set each cell — create items if missing
+                        self.results_table.setItem(row, 1, QTableWidgetItem(r.get("text", "")))
+                        self.results_table.setItem(row, 2, QTableWidgetItem(f"{r.get('duration_ms', 0):.0f}"))
+                        self.results_table.setItem(row, 3, QTableWidgetItem("Success"))
 
-                            if reference and r["text"]:
+                        if reference and r.get("text"):
+                            try:
                                 score_result = self.scorer.score(reference, r["text"], use_cer=True)
                                 cer_item = QTableWidgetItem(score_result.cer_percent)
                                 if score_result.cer <= 0.1:
@@ -462,12 +470,24 @@ class STTTab(QWidget):
                                     cer_item.setBackground(Qt.GlobalColor.red)
                                     cer_item.setForeground(Qt.GlobalColor.white)
                                 self.results_table.setItem(row, 4, cer_item)
-
-                                acc_item = QTableWidgetItem(score_result.accuracy_percent)
-                                self.results_table.setItem(row, 5, acc_item)
-
+                                self.results_table.setItem(row, 5, QTableWidgetItem(score_result.accuracy_percent))
                                 err_str = f"{score_result.substitutions}/{score_result.deletions}/{score_result.insertions}"
                                 self.results_table.setItem(row, 6, QTableWidgetItem(err_str))
-                            else:
-                                self.results_table.setItem(row, 4, QTableWidgetItem("-"))
+                            except Exception:
+                                self.results_table.setItem(row, 4, QTableWidgetItem("err"))
                                 self.results_table.setItem(row, 5, QTableWidgetItem("-"))
+                                self.results_table.setItem(row, 6, QTableWidgetItem("-"))
+                        else:
+                            self.results_table.setItem(row, 4, QTableWidgetItem("-"))
+                            self.results_table.setItem(row, 5, QTableWidgetItem("-"))
+                            self.results_table.setItem(row, 6, QTableWidgetItem("-"))
+                    else:
+                        self.results_table.setItem(row, 1, QTableWidgetItem(""))
+                        self.results_table.setItem(row, 2, QTableWidgetItem("-"))
+                        self.results_table.setItem(row, 3, QTableWidgetItem(
+                            f"Failed: {r.get('error', 'unknown')[:60]}"
+                        ))
+                        self.results_table.setItem(row, 4, QTableWidgetItem("-"))
+                        self.results_table.setItem(row, 5, QTableWidgetItem("-"))
+                        self.results_table.setItem(row, 6, QTableWidgetItem("-"))
+                    break

@@ -18,7 +18,7 @@ edge-tts>=6.1.0
 openai>=1.30.0
 google-cloud-speech>=2.26.0
 SpeechRecognition>=3.10.0
-vosk>=0.3.45
+vosk>=0.3.44
 pydub>=0.25.1
 
 # HTTP/API
@@ -33,3 +33,9 @@ nemo-toolkit[asr]>=1.21.0
 # Utils
 python-dotenv>=1.0.0
 certifi>=2024.0.0
+
+# Meta MMS (local offline TTS + STT, no API key needed)
+# Models download automatically on first use (~130 MB TTS, ~1.2 GB STT)
+transformers>=4.40.0
+torch>=2.1.0
+scipy>=1.11.0

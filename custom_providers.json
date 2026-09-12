@@ -1,1 +1,33 @@
-[]
+[
+  {
+    "id": "91fffc5f",
+    "name": "Deepgram STT",
+    "provider_type": "stt",
+    "api_key": "c2bd1dd70bc8efa4adef5cb4358306ecfe73a0d1",
+    "endpoint": "https://api.deepgram.com/v1/listen",
+    "models": [
+      "nova-2",
+      "base"
+    ],
+    "headers": {},
+    "config": {},
+    "created_at": "2026-09-10 12:36:59"
+  },
+  {
+    "id": "fb404daa",
+    "name": "Deepgram TTS",
+    "provider_type": "tts",
+    "api_key": "c2bd1dd70bc8efa4adef5cb4358306ecfe73a0d1",
+    "endpoint": "https://api.deepgram.com/v1/speak",
+    "models": [
+      "aura-asteria-en",
+      "aura-luna-en",
+      "aura-stella-en",
+      "aura-athena-en",
+      "aura-hera-en"
+    ],
+    "headers": {},
+    "config": {},
+    "created_at": "2026-09-11 18:33:49"
+  }
+]

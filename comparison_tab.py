@@ -113,6 +113,20 @@ class ComparisonTab(QWidget):
         self.clear_btn.clicked.connect(self._on_clear)
         controls_row.addWidget(self.clear_btn)
 
+        self.refresh_btn = QPushButton("↻  Refresh")
+        self.refresh_btn.setStyleSheet("""
+            QPushButton { 
+                background-color: #16a34a; 
+                color: white; 
+                padding: 10px 20px;
+                font-weight: 600;
+            }
+            QPushButton:hover { background-color: #15803d; }
+        """)
+        self.refresh_btn.setToolTip("Reload and re-sort the results table and rankings")
+        self.refresh_btn.clicked.connect(self._refresh_table)
+        controls_row.addWidget(self.refresh_btn)
+
         controls_row.addStretch()
 
         controls_row.addWidget(QLabel("Filter:"))

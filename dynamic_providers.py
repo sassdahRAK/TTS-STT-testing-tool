@@ -200,55 +200,96 @@ class DynamicTTSCaller:
         """Synthesize speech from a custom TTS provider."""
         start = time.time()
         try:
-            headers = {"Content-Type": "application/json"}
+            headers = {}
             if provider.api_key:
-                headers["Authorization"] = f"Bearer {provider.api_key}"
+                headers["Authorization"] = f"Token {provider.api_key}"
             headers.update(provider.headers)
 
-            # Build payload based on provider config or generic format
-            payload = provider.config.get("payload_template", {})
-            if not payload:
-                # Generic OpenAI-compatible TTS payload
-                payload = {
-                    "model": voice or (provider.models[0] if provider.models else "default"),
-                    "input": text,
-                    "voice": voice or "alloy",
-                    "response_format": "wav",
-                }
-            else:
-                # Replace placeholders in template
-                payload_str = json.dumps(payload)
-                payload_str = payload_str.replace("{{text}}", text)
-                payload_str = payload_str.replace("{{voice}}", voice)
-                payload_str = payload_str.replace("{{model}}", voice or (provider.models[0] if provider.models else "default"))
-                payload = json.loads(payload_str)
+            endpoint = provider.endpoint
+            model = provider.models[0] if provider.models else "aura-asteria-en"
 
-            with httpx.Client(timeout=120.0) as client:
-                response = client.post(provider.endpoint, json=payload, headers=headers)
-                response.raise_for_status()
-
-                content_type = response.headers.get("content-type", "")
-                if "audio" in content_type or response.content[:4] == b"RIFF":
-                    # Direct audio response
+            # ── Deepgram Aura TTS ──────────────────────────────────────────────
+            # POST https://api.deepgram.com/v1/speak?model=aura-asteria-en
+            # Body: plain text (Content-Type: text/plain)
+            if "deepgram.com/v1/speak" in endpoint:
+                headers["Content-Type"] = "text/plain"
+                params = {"model": model}
+                with httpx.Client(timeout=120.0) as client:
+                    response = client.post(
+                        endpoint, params=params,
+                        content=text.encode("utf-8"), headers=headers
+                    )
+                    response.raise_for_status()
                     with open(output_path, "wb") as f:
                         f.write(response.content)
+
+            # ── ElevenLabs TTS ────────────────────────────────────────────────
+            elif "elevenlabs.io" in endpoint:
+                headers["Content-Type"] = "application/json"
+                headers["xi-api-key"] = provider.api_key
+                headers.pop("Authorization", None)
+                voice_id = model  # model field holds voice_id for ElevenLabs
+                url = f"https://api.elevenlabs.io/v1/text-to-speech/{voice_id}"
+                payload = {
+                    "text": text,
+                    "model_id": "eleven_monolingual_v1",
+                    "voice_settings": {"stability": 0.5, "similarity_boost": 0.5}
+                }
+                with httpx.Client(timeout=120.0) as client:
+                    response = client.post(url, json=payload, headers=headers)
+                    response.raise_for_status()
+                    with open(output_path, "wb") as f:
+                        f.write(response.content)
+
+            # ── OpenAI-compatible TTS (generic) ───────────────────────────────
+            else:
+                headers["Content-Type"] = "application/json"
+                # Switch to Bearer for OpenAI-style
+                headers["Authorization"] = f"Bearer {provider.api_key}"
+
+                payload_template = provider.config.get("payload_template", {})
+                if payload_template:
+                    payload_str = json.dumps(payload_template)
+                    payload_str = payload_str.replace("{{text}}", text)
+                    payload_str = payload_str.replace("{{voice}}", voice)
+                    payload_str = payload_str.replace("{{model}}", model)
+                    payload = json.loads(payload_str)
                 else:
-                    # JSON response with audio URL or base64
-                    data = response.json()
-                    if "audio" in data:
-                        import base64
-                        audio_data = base64.b64decode(data["audio"])
+                    payload = {
+                        "model": model,
+                        "input": text,
+                        "voice": voice or "alloy",
+                        "response_format": "wav",
+                    }
+
+                with httpx.Client(timeout=120.0) as client:
+                    response = client.post(endpoint, json=payload, headers=headers)
+                    response.raise_for_status()
+
+                    content_type = response.headers.get("content-type", "")
+                    if "audio" in content_type or response.content[:4] in (b"RIFF", b"ID3\x03", b"\xff\xfb"):
                         with open(output_path, "wb") as f:
-                            f.write(audio_data)
-                    elif "url" in data:
-                        audio_resp = client.get(data["url"])
-                        with open(output_path, "wb") as f:
-                            f.write(audio_resp.content)
+                            f.write(response.content)
                     else:
-                        return {"success": False, "duration_ms": 0, "error": "Unexpected response format"}
+                        data = response.json()
+                        if "audio" in data:
+                            import base64
+                            with open(output_path, "wb") as f:
+                                f.write(base64.b64decode(data["audio"]))
+                        elif "url" in data:
+                            audio_resp = client.get(data["url"])
+                            with open(output_path, "wb") as f:
+                                f.write(audio_resp.content)
+                        else:
+                            return {"success": False, "duration_ms": 0,
+                                    "error": f"Unexpected response: {str(data)[:200]}"}
 
             duration = (time.time() - start) * 1000
             return {"success": True, "duration_ms": duration, "error": "", "output_path": output_path}
+
+        except httpx.HTTPStatusError as e:
+            return {"success": False, "duration_ms": 0,
+                    "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}"}
         except Exception as e:
             return {"success": False, "duration_ms": 0, "error": str(e)}
 
@@ -263,41 +304,69 @@ class DynamicSTTCaller:
         try:
             headers = {}
             if provider.api_key:
-                headers["Authorization"] = f"Bearer {provider.api_key}"
+                headers["Authorization"] = f"Token {provider.api_key}"
             headers.update(provider.headers)
 
+            model = provider.models[0] if provider.models else "nova-2"
+
             with httpx.Client(timeout=120.0) as client:
-                with open(audio_path, "rb") as audio_file:
-                    # Try multipart upload first (most common)
-                    files = {
-                        "file": ("audio.wav", audio_file, "audio/wav"),
-                    }
-                    data = {
-                        "model": provider.models[0] if provider.models else "default",
+
+                # ── Deepgram STT ───────────────────────────────────────────────
+                # POST audio as raw bytes with query params
+                if "deepgram.com" in provider.endpoint:
+                    headers["Content-Type"] = "audio/wav"
+                    params = {
+                        "model": model,
                         "language": language.split("-")[0],
+                        "punctuate": "true",
                     }
-
-                    response = client.post(provider.endpoint, files=files, data=data, headers=headers)
+                    with open(audio_path, "rb") as f:
+                        audio_bytes = f.read()
+                    response = client.post(
+                        provider.endpoint, params=params,
+                        content=audio_bytes, headers=headers
+                    )
                     response.raise_for_status()
+                    resp_data = response.json()
+                    text = (resp_data.get("results", {})
+                                     .get("channels", [{}])[0]
+                                     .get("alternatives", [{}])[0]
+                                     .get("transcript", ""))
 
-                resp_data = response.json()
+                # ── Generic multipart (OpenAI Whisper-compatible) ──────────────
+                else:
+                    with open(audio_path, "rb") as audio_file:
+                        files = {"file": ("audio.wav", audio_file, "audio/wav")}
+                        data = {
+                            "model": model,
+                            "language": language.split("-")[0],
+                        }
+                        response = client.post(
+                            provider.endpoint, files=files,
+                            data=data, headers=headers
+                        )
+                        response.raise_for_status()
+                        resp_data = response.json()
 
-                # Try to extract text from various response formats
-                text = ""
-                if isinstance(resp_data, str):
-                    text = resp_data
-                elif "text" in resp_data:
-                    text = resp_data["text"]
-                elif "transcript" in resp_data:
-                    text = resp_data["transcript"]
-                elif "results" in resp_data and "channels" in resp_data["results"]:
-                    # Deepgram format
-                    text = resp_data["results"]["channels"][0]["alternatives"][0].get("transcript", "")
-                elif "data" in resp_data and "text" in resp_data["data"]:
-                    text = resp_data["data"]["text"]
+                    # Extract text from various response formats
+                    text = ""
+                    if isinstance(resp_data, str):
+                        text = resp_data
+                    elif "text" in resp_data:
+                        text = resp_data["text"]
+                    elif "transcript" in resp_data:
+                        text = resp_data["transcript"]
+                    elif "results" in resp_data:
+                        text = (resp_data["results"].get("channels", [{}])[0]
+                                .get("alternatives", [{}])[0]
+                                .get("transcript", ""))
 
             duration = (time.time() - start) * 1000
             return {"success": True, "text": text, "duration_ms": duration, "error": ""}
+
+        except httpx.HTTPStatusError as e:
+            return {"success": False, "text": "", "duration_ms": 0,
+                    "error": f"HTTP {e.response.status_code}: {e.response.text[:200]}"}
         except Exception as e:
             return {"success": False, "text": "", "duration_ms": 0, "error": str(e)}
 

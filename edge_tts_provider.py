@@ -114,7 +114,14 @@ class EdgeTTSProvider:
                 communicate = edge_tts.Communicate(text, voice)
                 await communicate.save(output_path)
 
-            asyncio.run(_synthesize())
+            # Use a brand-new event loop to avoid conflicts with Qt's event loop
+            # asyncio.run() can fail when called from inside a QThread
+            loop = asyncio.new_event_loop()
+            try:
+                loop.run_until_complete(_synthesize())
+            finally:
+                loop.close()
+
             duration = (time.time() - start) * 1000
             return {
                 "success": True,

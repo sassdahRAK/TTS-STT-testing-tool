@@ -9,6 +9,7 @@ from abc import ABC, abstractmethod
 from typing import Optional
 
 from config import APIConfig
+from mms_providers import get_mms_stt, MMSSTTProvider
 
 
 class STTProvider(ABC):
@@ -239,6 +240,23 @@ class VoskSTTProvider(STTProvider):
             return {"success": False, "text": "", "duration_ms": 0, "error": str(e)}
 
 
+class MMSSTTProviderWrapper(STTProvider):
+    """Wraps MMSSTTProvider to fit the STTProvider interface."""
+
+    name = "mms_stt"
+    display_name = "Meta MMS STT"
+
+    def __init__(self, config: APIConfig):
+        super().__init__(config)
+        self._mms = get_mms_stt()
+
+    def is_available(self) -> bool:
+        return self._mms.is_available()
+
+    def transcribe(self, audio_path: str, language: str = "en-US") -> dict:
+        return self._mms.transcribe(audio_path, language)
+
+
 class STTProviderManager:
     """Manages all STT providers."""
 
@@ -249,6 +267,7 @@ class STTProviderManager:
             "google": GoogleSTTProvider(config),
             "azure": AzureSTTProvider(config),
             "local": VoskSTTProvider(config),
+            "mms_stt": MMSSTTProviderWrapper(config),
         }
 
     def get_available_providers(self) -> list[str]:

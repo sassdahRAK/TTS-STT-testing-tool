@@ -68,8 +68,14 @@ DETECTION_PATTERNS = {
         "models": ["eleven_monolingual_v1", "eleven_multilingual_v1"],
         "endpoint_template": "https://api.elevenlabs.io/v1/text-to-speech/{voice_id}",
     },
+    "camb_ai_stt": {
+        "patterns": ["client.camb.ai/apis/transcribe"],
+        "type": "stt",
+        "models": ["fast", "slow"],
+        "endpoint_template": "https://client.camb.ai/apis/transcribe",
+    },
     "camb_ai": {
-        "patterns": ["client.camb.ai", "camb.ai/apis"],
+        "patterns": ["client.camb.ai/apis/tts", "client.camb.ai", "camb.ai/apis"],
         "type": "tts",
         "models": ["mars-8.1-flash-beta", "mars-8.1-pro-beta", "mars-flash", "mars-pro"],
         "endpoint_template": "https://client.camb.ai/apis/tts-stream",
@@ -373,6 +379,85 @@ class DynamicSTTCaller:
             model = provider.models[0] if provider.models else "nova-2"
 
             with httpx.Client(timeout=120.0) as client:
+
+                # ── Camb.ai STT (async: submit → poll → fetch) ────────────────
+                # POST /apis/transcribe  → task_id
+                # GET  /apis/transcribe/{task_id} → {status, run_id}
+                # POST /apis/transcribe/results → [{text,...}]  (requires paid tier)
+                if "camb.ai" in provider.endpoint:
+                    import time as _time
+                    headers.pop("Authorization", None)
+                    headers["x-api-key"] = provider.api_key
+
+                    CAMB_LANG_MAP = {
+                        "km-KH": "km-kh", "en-US": "en-us", "en-GB": "en-gb",
+                        "fr-FR": "fr-fr", "de-DE": "de-de", "es-ES": "es-es",
+                        "ja-JP": "ja-jp", "zh-CN": "zh-cn", "ko-KR": "ko-kr",
+                    }
+                    camb_lang = CAMB_LANG_MAP.get(language, language.lower())
+
+                    # Step 1: Submit the audio file
+                    with open(audio_path, "rb") as af:
+                        submit_resp = client.post(
+                            "https://client.camb.ai/apis/transcribe",
+                            files={"media_file": ("audio.wav", af, "audio/wav")},
+                            data={"language": camb_lang,
+                                  "transcription_mode": provider.models[0] if provider.models else "fast"},
+                            headers=headers,
+                            timeout=60,
+                        )
+                    submit_resp.raise_for_status()
+                    task_id = submit_resp.json().get("task_id")
+                    if not task_id:
+                        return {"success": False, "text": "", "duration_ms": 0,
+                                "error": f"No task_id in response: {submit_resp.text[:200]}"}
+
+                    # Step 2: Poll until complete (max 120s)
+                    run_id = None
+                    for _ in range(24):
+                        _time.sleep(5)
+                        poll_resp = client.get(
+                            f"https://client.camb.ai/apis/transcribe/{task_id}",
+                            headers=headers, timeout=15
+                        )
+                        poll_data = poll_resp.json()
+                        status = poll_data.get("status")
+                        if status == "SUCCESS":
+                            run_id = poll_data.get("run_id")
+                            break
+                        elif status in ("FAILED", "ERROR"):
+                            return {"success": False, "text": "", "duration_ms": 0,
+                                    "error": f"Camb.ai transcription failed: {poll_data.get('exception_reason', status)}"}
+
+                    if not run_id:
+                        return {"success": False, "text": "", "duration_ms": 0,
+                                "error": "Camb.ai transcription timed out after 120s"}
+
+                    # Step 3: Fetch transcript text (requires Pro/paid tier)
+                    # Submit a dummy second run_id to satisfy 2-5 minimum requirement
+                    fetch_resp = client.post(
+                        "https://client.camb.ai/apis/transcribe/results",
+                        json={"run_ids": [run_id, run_id]},
+                        headers={**headers, "Content-Type": "application/json"},
+                        timeout=15,
+                    )
+
+                    if fetch_resp.status_code == 403:
+                        return {"success": False, "text": "", "duration_ms": 0,
+                                "error": f"Camb.ai transcript retrieval requires a paid plan. "
+                                         f"The audio was transcribed (run_id: {run_id}) but the "
+                                         f"results endpoint is not accessible on the free tier. "
+                                         f"Upgrade at studio.camb.ai to retrieve transcripts."}
+
+                    fetch_resp.raise_for_status()
+                    result_data = fetch_resp.json()
+
+                    # Response: {run_id_str: [{start, end, text, speaker}, ...]}
+                    segments = result_data.get(str(run_id), [])
+                    text = " ".join(seg.get("text", "") for seg in segments).strip()
+
+                    duration = (_time.time() - start) * 1000
+                    return {"success": True, "text": text, "duration_ms": duration, "error": ""}
 
                 # ── Deepgram STT ───────────────────────────────────────────────
                 # POST audio as raw bytes with query params
